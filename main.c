@@ -10,12 +10,20 @@ const int window_height = 600;
 
 // BALL VALUES
 const float ball_radius = 10.0f;
-const float ball_velocity = 1.0f;
+const float ball_velocity = 3.0f;
 
 // PADDLE VALUES
 const float paddle_width = 60.0f;
 const float paddle_height = 20.0f;
-const float paddle_velocity = 3.0f;
+const float paddle_velocity = 5.0f;
+
+// BLOCKS
+const float block_width = 60.0f;
+const float block_height = 20.0f;
+const int num_block_x = 11;
+const int num_block_y = 4;
+
+#define NUM_BLOCKS (num_block_x * num_block_y)
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
@@ -23,6 +31,8 @@ static SDL_Renderer *renderer;
 const SDL_Colour RED = {255, 000, 000, 255};
 const SDL_Colour BLUE = {000, 255, 000, 255};
 const SDL_Colour GREEN = {000, 000, 255, 255};
+
+#define PRINT_REC(REC) printf("%s {%d, %d, %d, %d}\n", #REC, (REC).x, (REC).y, (REC).w, (REC).h);
 
 struct Ball
 {
@@ -66,36 +76,67 @@ void BALL_Move(struct Ball *ball)
 
 struct Paddle
 {
-    float x;
-    float y;
-    float w;
-    float h;
+    SDL_Rect rec;
     float vel_x;
     float vel_y;
     SDL_Colour colour;
 };
+
+struct Block
+{
+    SDL_Rect rec;
+    bool alive;
+    SDL_Colour colour;
+};
+
+void BLOCK_Draw(struct Block *blocks)
+{
+    for (int y = 0; y < num_block_y; y++)
+    {
+        for (int x = 0; x < num_block_x; x++)
+        {
+            const int index = y * num_block_y + x;
+
+            if (blocks[index].alive)
+            {
+                SDL_RenderDrawRect(renderer, &blocks[index].rec);
+            }
+        }
+    }
+}
 
 void PADDLE_Draw(struct Paddle *paddle)
 {
     // const float half_paddle_width = paddle_width / 2.0f;
     // const float half_paddle_height = paddle_height / 2.0f;
 
-    const float top_right_x = paddle->x + paddle_width;
-    const float top_right_y = paddle->y + paddle_height;
+    // const float top_right_x = paddle->x + paddle_width;
+    // const float top_right_y = paddle->y + paddle_height;
 
-    const float bottom_left_x = paddle->x;
-    const float bottom_left_y = paddle->y;
+    // const float bottom_left_x = paddle->x;
+    // const float bottom_left_y = paddle->y;
 
-    if (rectangleRGBA(renderer, top_right_x, top_right_y, bottom_left_x, bottom_left_y, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a))
+    // if (rectangleRGBA(renderer, top_right_x, top_right_y, bottom_left_x, bottom_left_y, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a))
+    //{
+    //     fprintf(stderr, "[rectangleRGBA] Failed to draw rectangle\n");
+    //     exit(EXIT_FAILURE);
+    // }
+
+    if (SDL_RenderDrawRect(renderer, &paddle->rec))
     {
-        fprintf(stderr, "[rectangleRGBA] Failed to draw rectangle\n");
+        fprintf(stderr, "[SDL_RenderDrawRect] Failed to draw rectangle: %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
     }
 }
 
 void PADDLE_Move(struct Paddle *paddle)
 {
-    paddle->x += paddle->vel_x;
+    paddle->rec.x += paddle->vel_x;
+}
+
+bool REC_REC_Collision(const SDL_Rect *rect1, const SDL_Rect *rect2)
+{
+    return (bool)SDL_HasIntersection(rect1, rect2);
 }
 
 void BALL_PADDLE_collision(struct Ball *ball, struct Paddle *paddle)
@@ -105,18 +146,17 @@ void BALL_PADDLE_collision(struct Ball *ball, struct Paddle *paddle)
     const float ball_top = ball->y - ball->radius;
     const float ball_bottom = ball->y + ball->radius;
 
-    const float paddle_left = paddle->x;
-    const float paddle_top = paddle->y;
-    const float paddle_bottom = paddle->y + paddle_height;
-    const float paddle_right = paddle->x + paddle_width;
+    const float paddle_left = paddle->rec.x;
+    const float paddle_top = paddle->rec.y;
+    const float paddle_right = paddle->rec.x + paddle->rec.w;
+    const float paddle_bottom = paddle->rec.y + paddle->rec.h;
 
-    //if (!(ball_right >= paddle_left && ball_left <= paddle_right && ball_bottom >= paddle_top && ball_top <= paddle_bottom))
     if (!(ball_right >= paddle_left && ball_left <= paddle_right && ball_bottom >= paddle_top && ball_top <= paddle_bottom))
         return;
 
     ball->vel_y = -ball_velocity;
 
-    if (ball->x < paddle->x)
+    if (ball->x < paddle->rec.x)
     {
         ball->vel_x = -ball_velocity;
     }
@@ -171,20 +211,35 @@ int main(int argc, char *argv[])
     b.radius = ball_radius;
 
     struct Paddle p;
-    p.x = window_width / 2;
-    p.y = window_height - 50.0f;
-    p.w = paddle_width;
-    p.h = paddle_height;
+    p.rec.x = window_width / 2;
+    p.rec.y = window_height - 50.0f;
+    p.rec.w = paddle_width;
+    p.rec.h = paddle_height;
     p.colour = BLUE;
     p.vel_x = 0.0f;
     p.vel_y = 0.0f;
+
+    struct Block blocks[num_block_x * num_block_y];
+
+    for (int y = 0; y < num_block_y; y++)
+    {
+        for (int x = 0; x < num_block_x; x++)
+        {
+            const int index = y * num_block_y + x;
+
+            blocks[index].rec = {(x + 1) * (block_width + 3) + 22,
+                                 (y + 2) * (block_height + 3),
+                                 block_width,
+                                 block_height};
+            blocks[index].colour = BLUE;
+            blocks[index].alive = true;
+        }
+    }
 
     bool quit = false;
     SDL_Event sdlEvent;
     while (!quit)
     {
-        printf("Paddle : (%0.1f, %0.1f)\n", p.x, p.y);
-
         while (SDL_PollEvent(&sdlEvent) != 0)
         {
             if (sdlEvent.type == SDL_QUIT)
@@ -201,7 +256,7 @@ int main(int argc, char *argv[])
         if (keystates[SDL_SCANCODE_A]) // back
         {
             // LEFT
-            if (p.x > 1.0f)
+            if (p.rec.x > 1.0f)
             {
                 p.vel_x = -paddle_velocity;
             }
@@ -213,7 +268,7 @@ int main(int argc, char *argv[])
         else if (keystates[SDL_SCANCODE_D]) // back
         {
             // RIGHT
-            if (p.x < window_width - paddle_width - 1.0f)
+            if (p.rec.x < window_width - paddle_width - 1.0f)
             {
                 p.vel_x = paddle_velocity;
             }
@@ -237,6 +292,8 @@ int main(int argc, char *argv[])
 
         PADDLE_Move(&p);
         PADDLE_Draw(&p);
+
+        BLOCK_Draw(blocks);
 
         SDL_RenderPresent(renderer);
     }
