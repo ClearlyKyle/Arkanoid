@@ -22,15 +22,16 @@ const float block_width = 60.0f;
 const float block_height = 20.0f;
 const int num_block_x = 11;
 const int num_block_y = 4;
+const int block_offset = window_width / num_block_x - (block_width);
 
 #define NUM_BLOCKS (num_block_x * num_block_y)
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 
-const SDL_Colour RED = {255, 000, 000, 255};
-const SDL_Colour BLUE = {000, 255, 000, 255};
-const SDL_Colour GREEN = {000, 000, 255, 255};
+const SDL_Colour RED = {255, 000, 000, 255}; // r g b a
+const SDL_Colour GREEN = {000, 255, 000, 255};
+const SDL_Colour BLUE = {000, 000, 255, 255};
 
 #define PRINT_REC(REC) printf("%s {%d, %d, %d, %d}\n", #REC, (REC).x, (REC).y, (REC).w, (REC).h);
 
@@ -89,22 +90,6 @@ struct Block
     SDL_Colour colour;
 };
 
-void BLOCK_Draw(struct Block *blocks)
-{
-    for (int y = 0; y < num_block_y; y++)
-    {
-        for (int x = 0; x < num_block_x; x++)
-        {
-            const int index = y * num_block_y + x;
-
-            if (blocks[index].alive)
-            {
-                SDL_RenderDrawRect(renderer, &blocks[index].rec);
-            }
-        }
-    }
-}
-
 void PADDLE_Draw(struct Paddle *paddle)
 {
     // const float half_paddle_width = paddle_width / 2.0f;
@@ -122,6 +107,7 @@ void PADDLE_Draw(struct Paddle *paddle)
     //     exit(EXIT_FAILURE);
     // }
 
+    SDL_SetRenderDrawColor(renderer, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a);
     if (SDL_RenderDrawRect(renderer, &paddle->rec))
     {
         fprintf(stderr, "[SDL_RenderDrawRect] Failed to draw rectangle: %s\n", SDL_GetError());
@@ -139,30 +125,68 @@ bool REC_REC_Collision(const SDL_Rect *rect1, const SDL_Rect *rect2)
     return (bool)SDL_HasIntersection(rect1, rect2);
 }
 
-void BALL_PADDLE_collision(struct Ball *ball, struct Paddle *paddle)
+bool BALL_REC_Collision(struct Ball *ball, const SDL_Rect *rec)
 {
     const float ball_left = ball->x - ball->radius;
     const float ball_right = ball->x + ball->radius;
     const float ball_top = ball->y - ball->radius;
     const float ball_bottom = ball->y + ball->radius;
 
-    const float paddle_left = paddle->rec.x;
-    const float paddle_top = paddle->rec.y;
-    const float paddle_right = paddle->rec.x + paddle->rec.w;
-    const float paddle_bottom = paddle->rec.y + paddle->rec.h;
+    const float paddle_left = rec->x;
+    const float paddle_top = rec->y;
+    const float paddle_right = rec->x + rec->w;
+    const float paddle_bottom = rec->y + rec->h;
 
     if (!(ball_right >= paddle_left && ball_left <= paddle_right && ball_bottom >= paddle_top && ball_top <= paddle_bottom))
-        return;
+        return false;
 
     ball->vel_y = -ball_velocity;
 
-    if (ball->x < paddle->rec.x)
+    if (ball->x < rec->x)
     {
         ball->vel_x = -ball_velocity;
     }
     else
     {
         ball->vel_x = ball_velocity;
+    }
+    return true;
+}
+
+void BLOCK_Draw(struct Block *blocks)
+{
+    for (int y = 0; y < num_block_y; y++)
+    {
+        for (int x = 0; x < num_block_x; x++)
+        {
+            const int index = y * num_block_x + x;
+
+            if (blocks[index].alive)
+            {
+                SDL_SetRenderDrawColor(renderer, blocks[index].colour.r, blocks[index].colour.g, blocks[index].colour.b, blocks[index].colour.a);
+                SDL_RenderFillRect(renderer, &blocks[index].rec);
+            }
+        }
+    }
+}
+
+void BLOCK_Collision(struct Ball *ball, struct Block *blocks)
+{
+    for (int y = 0; y < num_block_y; y++)
+    {
+        for (int x = 0; x < num_block_x; x++)
+        {
+            const int index = y * num_block_x + x;
+
+            if (blocks[index].alive)
+            {
+                if (BALL_REC_Collision(ball, &blocks[index].rec))
+                {
+                    blocks[index].alive = false;
+                    ball->vel_x = -ball_velocity;
+                }
+            }
+        }
     }
 }
 
@@ -225,12 +249,13 @@ int main(int argc, char *argv[])
     {
         for (int x = 0; x < num_block_x; x++)
         {
-            const int index = y * num_block_y + x;
+            const int index = y * num_block_x + x;
 
-            blocks[index].rec = {(x + 1) * (block_width + 3) + 22,
-                                 (y + 2) * (block_height + 3),
-                                 block_width,
-                                 block_height};
+            blocks[index].rec.x = ((x) * (block_width + block_offset)) + block_offset;
+            blocks[index].rec.y = (y + 2) * (block_height + 6);
+            blocks[index].rec.w = block_width;
+            blocks[index].rec.h = block_height;
+
             blocks[index].colour = BLUE;
             blocks[index].alive = true;
         }
@@ -285,7 +310,8 @@ int main(int argc, char *argv[])
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 
-        BALL_PADDLE_collision(&b, &p);
+        BALL_REC_Collision(&b, &p.rec);
+        BLOCK_Collision(&b, blocks);
 
         BALL_Move(&b);
         BALL_Draw(&b);
