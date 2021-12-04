@@ -3,7 +3,6 @@
 #include <stdbool.h>
 
 #include "SDL2/SDL.h"
-#include "SDL2_gfxPrimitives.h"
 
 const int window_width = 800;
 const int window_height = 600;
@@ -92,25 +91,10 @@ struct Block
 
 void PADDLE_Draw(struct Paddle *paddle)
 {
-    // const float half_paddle_width = paddle_width / 2.0f;
-    // const float half_paddle_height = paddle_height / 2.0f;
-
-    // const float top_right_x = paddle->x + paddle_width;
-    // const float top_right_y = paddle->y + paddle_height;
-
-    // const float bottom_left_x = paddle->x;
-    // const float bottom_left_y = paddle->y;
-
-    // if (rectangleRGBA(renderer, top_right_x, top_right_y, bottom_left_x, bottom_left_y, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a))
-    //{
-    //     fprintf(stderr, "[rectangleRGBA] Failed to draw rectangle\n");
-    //     exit(EXIT_FAILURE);
-    // }
-
-    SDL_SetRenderDrawColor(renderer, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a);
-    if (SDL_RenderDrawRect(renderer, &paddle->rec))
+    if (SDL_SetRenderDrawColor(renderer, paddle->colour.r, paddle->colour.g, paddle->colour.b, paddle->colour.a) ||
+        SDL_RenderFillRect(renderer, &paddle->rec))
     {
-        fprintf(stderr, "[SDL_RenderDrawRect] Failed to draw rectangle: %s\n", SDL_GetError());
+        fprintf(stderr, "[SDL_SetRenderDrawColor/ SDL_RenderDrawRect] Failed to draw rectangle: %s\n", SDL_GetError());
         exit(EXIT_FAILURE);
     }
 }
@@ -183,7 +167,8 @@ void BLOCK_Collision(struct Ball *ball, struct Block *blocks)
                 if (BALL_REC_Collision(ball, &blocks[index].rec))
                 {
                     blocks[index].alive = false;
-                    ball->vel_x = -ball_velocity;
+                    ball->vel_x *= -1;
+                    ball->vel_y *= -1;
                 }
             }
         }
